@@ -1,0 +1,14 @@
+# Database
+github "realm/realm-cocoa"
+
+# JSON Parsing
+github "SwiftyJSON/SwiftyJSON"
+
+# UI (User Inteface)
+github "jdg/MBProgressHUD"
+
+# Analytics - not really sure if this part is working
+binary "https://dl.google.com/dl/firebase/ios/carthage/FirebaseAnalyticsBinary.json"
+
+binary "https://building42.github.io/Specs/Carthage/iOS/Fabric.json"
+binary "https://building42.github.io/Specs/Carthage/iOS/Crashlytics.json"
