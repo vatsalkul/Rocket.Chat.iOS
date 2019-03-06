@@ -10,6 +10,7 @@ import UIKit
 
 private typealias ListSegueData = (title: String, query: String?, isListingMentions: Bool)
 
+// swiftlint:disable file_length
 class ChannelActionsViewController: BaseViewController {
 
     internal let kShareRoomSection = 2
@@ -27,29 +28,41 @@ class ChannelActionsViewController: BaseViewController {
 
     var subscription: Subscription? {
         didSet {
-            guard let subscription = self.subscription else { return }
+            guard let subscription = self.subscription?.validated() else { return }
 
             let isDirectMessage = subscription.type == .directMessage
 
-            var header: [Any?]? = nil
+            var header: [Any?]?
 
             if subscription.type == .directMessage {
                 header = [ChannelInfoUserCellData(user: subscription.directMessageUser)]
             } else {
                 let hasDescription = !(subscription.roomDescription?.isEmpty ?? true)
+                let hasAnnouncement = !(subscription.roomAnnouncement?.isEmpty ?? true)
                 let hasTopic = !(subscription.roomTopic?.isEmpty ?? true)
 
-                header = [
-                    ChannelInfoBasicCellData(title: "#\(subscription.name)"),
-                    ChannelInfoDescriptionCellData(
+                header = [ChannelInfoBasicCellData(title: "#\(subscription.name)")]
+
+                if hasDescription {
+                    header?.append(ChannelInfoDescriptionCellData(
                         title: localized("chat.info.item.description"),
-                        descriptionText: hasDescription ? subscription.roomDescription : localized("chat.info.item.no_description")
-                    ),
-                    ChannelInfoDescriptionCellData(
+                        descriptionText: subscription.roomDescription
+                    ))
+                }
+
+                if hasAnnouncement {
+                    header?.append(ChannelInfoDescriptionCellData(
+                        title: localized("chat.info.item.announcement"),
+                        descriptionText: subscription.roomAnnouncement
+                    ))
+                }
+
+                if hasTopic {
+                    header?.append(ChannelInfoDescriptionCellData(
                         title: localized("chat.info.item.topic"),
-                        descriptionText: hasTopic ? subscription.roomTopic : localized("chat.info.item.no_topic")
-                    )
-                ]
+                        descriptionText: subscription.roomTopic
+                    ))
+                }
             }
 
             func title(for menuTitle: String) -> String {
@@ -79,7 +92,7 @@ class ChannelActionsViewController: BaseViewController {
             tableView?.contentInsetAdjustmentBehavior = .never
         }
 
-        setupFavoriteButton()
+        setupNavigationBarButtons()
         registerCells()
     }
 
@@ -105,15 +118,37 @@ class ChannelActionsViewController: BaseViewController {
         ), forCellReuseIdentifier: ChannelInfoBasicCell.identifier)
     }
 
-    func setupFavoriteButton() {
+    func setupNavigationBarButtons() {
         if let settings = AuthSettingsManager.settings {
+            var buttons: [UIBarButtonItem] = []
+
             if settings.favoriteRooms {
-                let defaultImage = UIImage(named: "Star")?.imageWithTint(UIColor.RCGray()).withRenderingMode(.alwaysOriginal)
-                let buttonFavorite = UIBarButtonItem(image: defaultImage, style: .plain, target: self, action: #selector(buttonFavoriteDidPressed))
-                navigationItem.rightBarButtonItem = buttonFavorite
+                let defaultImage = UIImage(named: "Star")?
+                    .imageWithTint(UIColor.RCGray())
+                    .withRenderingMode(.alwaysOriginal)
+
+                let buttonFavorite = UIBarButtonItem(
+                    image: defaultImage,
+                    style: .plain,
+                    target: self,
+                    action: #selector(buttonFavoriteDidPressed)
+                )
+
+                buttons.append(buttonFavorite)
                 self.buttonFavorite = buttonFavorite
                 updateButtonFavoriteImage()
             }
+
+            if settings.isJitsiEnabled && AppManager.isVideoCallAvailable {
+                buttons.append(UIBarButtonItem(
+                    image: UIImage(named: "UserDetail_VideoCall"),
+                    style: .plain,
+                    target: self,
+                    action: #selector(buttonVideoCallDidPressed)
+                ))
+            }
+
+            navigationItem.rightBarButtonItems = buttons
         }
     }
 
@@ -142,7 +177,7 @@ extension ChannelActionsViewController {
     }
 
     @objc func buttonFavoriteDidPressed(_ sender: Any) {
-        guard let subscription = self.subscription else { return }
+        guard let subscription = self.subscription?.validated() else { return }
 
         SubscriptionManager.toggleFavorite(subscription) { [unowned self] (response) in
             DispatchQueue.main.async {
@@ -156,6 +191,12 @@ extension ChannelActionsViewController {
 
         self.subscription?.updateFavorite(!subscription.favorite)
         updateButtonFavoriteImage()
+    }
+
+    @objc func buttonVideoCallDidPressed(_ sender: UIButton) {
+        if let subscription = subscription {
+            AppManager.openVideoCall(room: subscription)
+        }
     }
 
 }
@@ -223,7 +264,7 @@ extension ChannelActionsViewController {
     }
 
     func shareRoom() {
-        guard let url = subscription?.externalURL() else { return }
+        guard let url = subscription?.validated()?.externalURL() else { return }
         let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
 
         if shareRoomCell != nil && UIDevice.current.userInterfaceIdiom == .pad {

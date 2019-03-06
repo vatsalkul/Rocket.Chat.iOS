@@ -40,7 +40,7 @@ class CASViewController: BaseViewController {
     }()
 
     lazy var activityIndicator: UIActivityIndicatorView = {
-        let activityIndicator = UIActivityIndicatorView(activityIndicatorStyle: UIActivityIndicatorViewStyle.whiteLarge)
+        let activityIndicator = UIActivityIndicatorView(style: UIActivityIndicatorView.Style.whiteLarge)
         activityIndicator.frame = CGRect(x: 0, y: 0, width: 80, height: 80)
         activityIndicator.layer.cornerRadius = 10
         activityIndicator.backgroundColor = UIColor.black.withAlphaComponent(0.5)
@@ -98,4 +98,10 @@ extension CASViewController: WKNavigationDelegate, Closeable {
         activityIndicator.stopAnimating()
         activityIndicator.isHidden = true
     }
+}
+
+// MARK: Disable Theming
+
+extension CASViewController {
+    override func applyTheme() { }
 }

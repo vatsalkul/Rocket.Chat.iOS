@@ -24,9 +24,9 @@ extension SocketManager {
             return self.handleConnectionMessage(result, socket: socket)
         case .ping:
             return self.handlePingMessage(result, socket: socket)
-        case .changed, .added, .removed:
+        case .changed, .added, .inserted, .updated, .removed:
             return self.handleModelUpdates(result, socket: socket)
-        case .updated, .unknown:
+        case .unknown:
             break
         case .error:
             self.handleError(result, socket: socket)
@@ -74,7 +74,7 @@ extension SocketManager {
                 isPresentingInvalidSessionAlert = true
 
                 let alertWindow = UIWindow.topWindow
-                alertWindow.windowLevel = UIWindowLevelAlert + 1
+                alertWindow.windowLevel = UIWindow.Level.alert + 1
                 alertWindow.rootViewController?.present(invalidSessionAlert, animated: true)
             }
 

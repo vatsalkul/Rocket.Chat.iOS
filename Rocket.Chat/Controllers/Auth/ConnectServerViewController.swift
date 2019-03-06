@@ -8,11 +8,9 @@
 
 import UIKit
 import SwiftyJSON
-import semver
 
 final class ConnectServerViewController: BaseViewController {
 
-    internal let defaultURL = "https://open.rocket.chat"
     internal var connecting = false
     internal let infoRequestHandler = InfoRequestHandler()
     internal let buttonConnectBottomSpacing: CGFloat = 24
@@ -22,10 +20,11 @@ final class ConnectServerViewController: BaseViewController {
 
     var shouldAutoConnect = false
     var url: URL? {
-        guard var urlText = textFieldServerURL.text else { return URL(string: defaultURL, scheme: "https") }
+        guard var urlText = textFieldServerURL.text else { return nil }
 
+        // Do not return URL in case text is nil
         if urlText.isEmpty {
-            urlText = defaultURL
+            return nil
         }
 
         // Remove all the whitespaces from the string
@@ -55,10 +54,16 @@ final class ConnectServerViewController: BaseViewController {
     @IBOutlet weak var buttonConnect: StyledButton! {
         didSet {
             buttonConnect.setTitle(localized("connection.button_connect"), for: .normal)
+            buttonConnect.isEnabled = false
+            buttonConnect.style = .solid
         }
     }
 
-    @IBOutlet weak var textFieldServerURL: UITextField!
+    @IBOutlet weak var textFieldServerURL: UITextField! {
+        didSet {
+            textFieldServerURL.addTarget(self, action: #selector(textFieldDidChange), for: .editingChanged)
+        }
+    }
 
     lazy var keyboardConstraint: NSLayoutConstraint = {
         var bottomGuide: NSLayoutYAxisAnchor
@@ -81,6 +86,10 @@ final class ConnectServerViewController: BaseViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        if shouldAutoConnect {
+            textFieldServerURL.text = "open.rocket.chat"
+        }
+
         if !(DatabaseManager.servers?.count ?? 0 > 0) {
             navigationItem.leftBarButtonItem = nil
         } else {
@@ -89,7 +98,7 @@ final class ConnectServerViewController: BaseViewController {
 
         selectedServer = DatabaseManager.selectedIndex
         infoRequestHandler.delegate = self
-        textFieldServerURL.placeholder = defaultURL
+        textFieldServerURL.placeholder = localized("connection.server_url.placeholder")
 
         if let nav = navigationController as? AuthNavigationController {
             nav.setTransparentTheme()
@@ -98,6 +107,9 @@ final class ConnectServerViewController: BaseViewController {
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(hideKeyboard))
         view.addGestureRecognizer(tapGesture)
 
+        SocketManager.sharedInstance.socket?.disconnect()
+        DatabaseManager.cleanInvalidDatabases()
+
         if shouldAutoConnect {
             connect()
         }
@@ -105,9 +117,6 @@ final class ConnectServerViewController: BaseViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-
-        SocketManager.sharedInstance.socket?.disconnect()
-        DatabaseManager.cleanInvalidDatabases()
 
         if let applicationServerURL = AppManager.applicationServerURL {
             textFieldServerURL.isEnabled = false
@@ -118,14 +127,14 @@ final class ConnectServerViewController: BaseViewController {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(keyboardWillAppear(_:)),
-            name: NSNotification.Name.UIKeyboardWillShow,
+            name: UIResponder.keyboardWillShowNotification,
             object: nil
         )
 
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(keyboardWillDisappear(_:)),
-            name: NSNotification.Name.UIKeyboardWillHide,
+            name: UIResponder.keyboardWillHideNotification,
             object: nil
         )
 
@@ -141,7 +150,7 @@ final class ConnectServerViewController: BaseViewController {
     // MARK: Keyboard Handling
 
     @objc func keyboardWillAppear(_ notification: Notification) {
-        if let keyboardSize = ((notification as NSNotification).userInfo?[UIKeyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue {
+        if let keyboardSize = ((notification as NSNotification).userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue {
             var viewRect = view.frame
             viewRect.size.height -= keyboardSize.height
 
@@ -181,7 +190,7 @@ final class ConnectServerViewController: BaseViewController {
         if let controller = segue.destination as? LoginTableViewController {
             controller.shouldShowCreateAccount = true
             controller.serverVersion = infoRequestHandler.version
-            controller.serverURL = url
+            controller.serverURL = infoRequestHandler.url
             controller.serverPublicSettings = serverPublicSettings
 
             if let credentials = deepLinkCredentials {
@@ -193,7 +202,7 @@ final class ConnectServerViewController: BaseViewController {
 
         if let controller = segue.destination as? AuthTableViewController, segue.identifier == "Auth" {
             controller.serverVersion = infoRequestHandler.version
-            controller.serverURL = url
+            controller.serverURL = infoRequestHandler.url
             controller.serverPublicSettings = serverPublicSettings
 
             if let credentials = deepLinkCredentials {
@@ -263,6 +272,7 @@ final class ConnectServerViewController: BaseViewController {
                 if connected {
                     API(host: serverURL, version: serverVersion ?? .zero).client(InfoClient.self).fetchLoginServices(completion: { loginServices, shouldRetrieveLoginServices in
                         self?.stopConnecting()
+
                         if shouldRetrieveLoginServices {
                             self?.performSegue(withIdentifier: "Auth", sender: shouldRetrieveLoginServices)
                         } else {
@@ -288,8 +298,16 @@ final class ConnectServerViewController: BaseViewController {
 
 extension ConnectServerViewController: UITextFieldDelegate {
 
-    func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
-        return !connecting
+    @objc func textFieldDidChange() {
+        if !connecting {
+            buttonConnect.isEnabled = !(textFieldServerURL.text?.isEmpty ?? true)
+        }
+    }
+
+    func textFieldShouldClear(_ textField: UITextField) -> Bool {
+        textFieldServerURL.text = ""
+        textFieldDidChange()
+        return true
     }
 
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
@@ -324,4 +342,10 @@ extension ConnectServerViewController: InfoRequestHandlerDelegate {
         }
     }
 
+}
+
+// MARK: Disable Theming
+
+extension ConnectServerViewController {
+    override func applyTheme() { }
 }

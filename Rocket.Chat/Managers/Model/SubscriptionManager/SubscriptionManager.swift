@@ -27,7 +27,7 @@ struct SubscriptionManager {
     static func updateSubscriptions(_ auth: Auth, realm: Realm? = Realm.current, completion: (() -> Void)?) {
         realm?.refresh()
 
-        let validAuth = auth.isInvalidated ? AuthManager.isAuthenticated(realm: realm) : auth
+        let validAuth = auth.validated() ?? AuthManager.isAuthenticated(realm: realm)
         guard let auth = validAuth else {
             return
         }
@@ -65,16 +65,26 @@ struct SubscriptionManager {
         SocketManager.subscribe(request, eventName: eventName) { response in
             guard !response.isError() else { return Log.debug(response.result.string) }
 
-            let msg = response.result["fields"]["args"][0]
+            let msg = response.result["fields"]["args"][0].stringValue
             let object = response.result["fields"]["args"][1]
 
             currentRealm?.execute({ (realm) in
                 guard let auth = AuthManager.isAuthenticated(realm: realm), auth.serverURL == serverURL else { return }
-                let subscription = Subscription.getOrCreate(realm: realm, values: object, updates: { (object) in
-                    object?.auth = msg == "removed" ? nil : auth
-                })
 
-                realm.add(subscription, update: true)
+                guard let rid = object["rid"].string, !rid.isEmpty else {
+                    return
+                }
+
+                let subscription = Subscription.find(rid: rid, realm: realm) ??
+                    Subscription.getOrCreate(realm: realm, values: object, updates: nil)
+                subscription.map(object, realm: realm)
+
+                if msg == "removed" {
+                    realm.delete(subscription)
+                } else {
+                    subscription.auth = auth
+                    realm.add(subscription, update: true)
+                }
             })
         }
     }
@@ -124,5 +134,15 @@ struct SubscriptionManager {
                 notification?.post()
             }
         }
+    }
+
+    static func updateJitsiTimeout(rid: String) {
+        let request = [
+            "msg": "method",
+            "method": "jitsi:updateTimeout",
+            "params": [rid]
+        ] as [String: Any]
+
+        SocketManager.send(request) { _ in }
     }
 }

@@ -9,20 +9,9 @@
 import RealmSwift
 
 extension Subscription {
-    func displayName() -> String {
-        guard let settings = AuthSettingsManager.settings else {
-            return name
-        }
-
-        if type != .directMessage {
-            return settings.allowSpecialCharsOnRoomNames && !fname.isEmpty ? fname : name
-        }
-
-        return settings.useUserRealName && !fname.isEmpty ? fname : name
-    }
 
     func isValid() -> Bool {
-        return self.rid.count > 0
+        return !self.rid.isEmpty
     }
 
     func isJoined() -> Bool {
@@ -62,6 +51,8 @@ extension Subscription {
     private func fetchDirectMessageIdentifier(_ completion: @escaping MessageCompletionObject <Subscription>) {
         guard let identifier = self.identifier else { return }
 
+        let name = self.name
+
         SubscriptionManager.createDirectMessage(name, completion: { (response) in
             guard !response.isError() else { return }
             guard let rid = response.result["result"]["rid"].string else { return }
@@ -83,8 +74,10 @@ extension Subscription {
                     }
                 }
             }, completion: {
-                if let subscription = Subscription.find(rid: rid) {
-                    completion(subscription)
+                DispatchQueue.main.async {
+                    if let subscription = Subscription.find(name: name) {
+                        completion(subscription)
+                    }
                 }
             })
         })
@@ -92,21 +85,31 @@ extension Subscription {
 
     func fetchMessages(_ limit: Int = 20, lastMessageDate: Date? = nil) -> [Message] {
         var limitedMessages: [Message] = []
-        var messages = fetchMessagesQueryResults()
+
+        guard var messages = fetchMessagesQueryResults() else { return [] }
 
         if let lastMessageDate = lastMessageDate {
             messages = messages.filter("createdAt < %@", lastMessageDate)
         }
 
-        for index in 0..<min(limit, messages.count) {
-            limitedMessages.append(messages[index])
+        let totalMessagesIndexes = messages.count - 1
+        for index in 0..<limit {
+            let reversedIndex = totalMessagesIndexes - index
+
+            guard totalMessagesIndexes >= reversedIndex, reversedIndex >= 0 else {
+                return limitedMessages
+            }
+
+            limitedMessages.append(messages[reversedIndex])
         }
 
         return limitedMessages
     }
 
-    func fetchMessagesQueryResults() -> Results<Message> {
-        var filteredMessages = self.messages.filter("userBlocked == false")
+    func fetchMessagesQueryResults() -> Results<Message>? {
+        guard var filteredMessages = self.messages?.filter("identifier != NULL AND createdAt != NULL") else {
+            return nil
+        }
 
         if let hiddenTypes = AuthSettingsManager.settings?.hiddenTypes {
             for hiddenType in hiddenTypes {
@@ -114,7 +117,7 @@ extension Subscription {
             }
         }
 
-        return filteredMessages.sorted(byKeyPath: "createdAt", ascending: false)
+        return filteredMessages.sorted(byKeyPath: "createdAt", ascending: true)
     }
 
     func updateFavorite(_ favorite: Bool) {
@@ -122,4 +125,26 @@ extension Subscription {
             self.favorite = favorite
         })
     }
+}
+
+// MARK: Failed Messages
+
+extension Subscription {
+
+    func setTemporaryMessagesFailed(user: User? = AuthManager.currentUser()) {
+        guard let user = user else {
+            return
+        }
+
+        Realm.executeOnMainThread { realm in
+            self.messages?.filter("temporary = true").filter({
+                $0.user == user
+            }).forEach {
+                $0.temporary = false
+                $0.failed = true
+                realm.add($0, update: true)
+            }
+        }
+    }
+
 }

@@ -61,7 +61,7 @@ struct AppManager {
         guard
             let appDelegate  = UIApplication.shared.delegate as? AppDelegate,
             let nav = appDelegate.window?.rootViewController as? UINavigationController,
-            let chatController = nav.viewControllers.first as? ChatViewController
+            let chatController = nav.viewControllers.first as? MessagesViewController
         else {
             return nil
         }
@@ -113,14 +113,20 @@ struct AppManager {
       Default language
     */
     static var defaultLanguage = "en"
+
+    // MARK: Video & Audio Call
+
+    static var isVideoCallAvailable: Bool {
+        return (NSLocale.current as NSLocale).countryCode != "CN"
+    }
 }
 
 extension AppManager {
 
-    static func changeSelectedServer(index: Int) {
+    static func changeSelectedServer(index: Int, completion: (() -> Void)? = nil) {
         guard index != DatabaseManager.selectedIndex else {
             DatabaseManager.changeDatabaseInstance(index: index)
-            reloadApp()
+            reloadApp(completion: completion)
             return
         }
 
@@ -131,7 +137,7 @@ extension AppManager {
             AuthSettingsManager.shared.updateCachedSettings()
             AuthManager.recoverAuthIfNeeded()
 
-            reloadApp()
+            reloadApp(completion: completion)
         }
     }
 
@@ -185,15 +191,11 @@ extension AppManager {
         }
     }
 
-    static func reloadApp() {
+    static func reloadApp(completion: (() -> Void)? = nil) {
         SocketManager.sharedInstance.connectionHandlers.removeAllObjects()
         SocketManager.disconnect { (_, _) in
             DispatchQueue.main.async {
                 if AuthManager.isAuthenticated() != nil {
-                    if let currentUser = AuthManager.currentUser() {
-                        AnalyticsCoordinator.identifyCrashReports(withUser: currentUser)
-                    }
-
                     WindowManager.open(.subscriptions)
 
                     let server = AuthManager.selectedServerHost()
@@ -212,6 +214,8 @@ extension AppManager {
                 } else {
                     WindowManager.open(.auth(serverUrl: "", credentials: nil))
                 }
+
+                completion?()
             }
         }
     }
@@ -222,7 +226,7 @@ extension AppManager {
 extension AppManager {
 
     @discardableResult
-    static func open(room: Subscription, animated: Bool = true) -> ChatViewController? {
+    static func open(room: Subscription, animated: Bool = true) -> MessagesViewController? {
         guard
             let appDelegate  = UIApplication.shared.delegate as? AppDelegate,
             let mainViewController = appDelegate.window?.rootViewController as? MainSplitViewController
@@ -231,7 +235,7 @@ extension AppManager {
         }
 
         if mainViewController.detailViewController as? BaseNavigationController != nil {
-            if let controller = UIStoryboard.controller(from: "Chat", identifier: "Chat") as? ChatViewController {
+            if let controller = UIStoryboard.controller(from: "Chat", identifier: "Chat") as? MessagesViewController {
                 controller.subscription = room
 
                 // Close all presenting controllers, modals & pushed
@@ -242,7 +246,7 @@ extension AppManager {
                 mainViewController.showDetailViewController(nav, sender: self)
                 return controller
             }
-        } else if let controller = UIStoryboard.controller(from: "Chat", identifier: "Chat") as? ChatViewController {
+        } else if let controller = UIStoryboard.controller(from: "Chat", identifier: "Chat") as? MessagesViewController {
             controller.subscription = room
 
             if let nav = mainViewController.viewControllers.first as? UINavigationController {
@@ -252,6 +256,38 @@ extension AppManager {
 
                 // Push the new controller to the stack
                 nav.pushViewController(controller, animated: animated)
+
+                return controller
+            }
+        }
+
+        return nil
+    }
+
+    @discardableResult
+    static func openVideoCall(room: Subscription, animated: Bool = true) -> JitsiViewController? {
+        guard
+            let appDelegate  = UIApplication.shared.delegate as? AppDelegate,
+            let mainViewController = appDelegate.window?.rootViewController as? MainSplitViewController,
+            let mainNav = mainViewController.viewControllers.first as? UINavigationController
+        else {
+            return nil
+        }
+
+        let storyboard = UIStoryboard(name: "Jitsi", bundle: Bundle.main)
+        if let nav = storyboard.instantiateInitialViewController() as? UINavigationController {
+            if let controller = nav.viewControllers.first as? JitsiViewController {
+                controller.viewModel.subscription = room.unmanaged
+
+                nav.modalTransitionStyle = .coverVertical
+
+                if let presentedViewController = mainNav.presentedViewController {
+                    presentedViewController.dismiss(animated: animated, completion: {
+                        mainNav.present(nav, animated: true, completion: nil)
+                    })
+                } else {
+                    mainNav.present(nav, animated: true, completion: nil)
+                }
 
                 return controller
             }

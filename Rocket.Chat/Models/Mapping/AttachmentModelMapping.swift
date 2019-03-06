@@ -22,11 +22,11 @@ extension Attachment: ModelMappeable {
 
     func map(_ values: JSON, realm: Realm?) {
         if self.identifier == nil {
-            self.identifier = String.random(30)
+            self.identifier = values.rawString()?.md5() ?? String.random(30)
         }
 
         if let authorName = values["author_name"].string {
-            self.title = "@\(authorName)"
+            self.title = "\(authorName)"
         }
 
         if let title = values["title"].string {

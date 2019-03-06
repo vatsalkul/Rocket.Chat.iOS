@@ -6,14 +6,11 @@
 //  Copyright © 2018 Rocket.Chat. All rights reserved.
 //
 
-import Foundation
 import UIKit
-import SafariServices
-import OnePasswordExtension
 import RealmSwift
 import MBProgressHUD
 
-class AuthTableViewController: BaseTableViewController {
+final class AuthTableViewController: BaseTableViewController {
 
     internal let kLoginProvidersSection: Int = 0
     internal var kLoginProvidersCollapsedMax: Int {
@@ -32,16 +29,19 @@ class AuthTableViewController: BaseTableViewController {
             return EmailAuthTableViewCell()
         }
 
+        let font = UIFont.preferredFont(forTextStyle: .body)
         let prefix = NSAttributedString(
             string: localized("auth.email_auth_prefix"),
             attributes: [
-                NSAttributedStringKey.font: UIFont.systemFont(ofSize: 16, weight: .regular)
+                NSAttributedString.Key.font: font,
+                NSAttributedString.Key.foregroundColor: UIColor.white
             ]
         )
         let service = NSAttributedString(
             string: localized("auth.email_auth"),
             attributes: [
-                NSAttributedStringKey.font: UIFont.systemFont(ofSize: 16, weight: .bold)
+                NSAttributedString.Key.font: font.bold() ?? font,
+                NSAttributedString.Key.foregroundColor: UIColor.white
             ]
         )
 
@@ -82,7 +82,7 @@ class AuthTableViewController: BaseTableViewController {
     var shouldRetrieveLoginServices = false
 
     var serverVersion: Version?
-    var serverURL: URL!
+    var serverURL: URL?
     var serverPublicSettings: AuthSettings?
 
     var api: API? {
@@ -90,7 +90,7 @@ class AuthTableViewController: BaseTableViewController {
             let serverURL = serverURL,
             let serverVersion = serverVersion
         else {
-                return nil
+            return nil
         }
 
         return API(host: serverURL, version: serverVersion)
@@ -125,7 +125,8 @@ class AuthTableViewController: BaseTableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        title = serverURL.host
+        title = serverURL?.host
+        setupTableView()
 
         guard let settings = serverPublicSettings else { return }
 
@@ -135,13 +136,10 @@ class AuthTableViewController: BaseTableViewController {
         } else {
             emailAuthRow.registerButton.isHidden = settings.registrationForm != .isPublic
         }
-
-        setupTableView()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-
         setupLoginServices()
     }
 
@@ -158,7 +156,7 @@ class AuthTableViewController: BaseTableViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
 
-        if isMovingFromParentViewController {
+        if isMovingFromParent {
             SocketManager.removeConnectionHandler(token: socketHandlerToken)
         }
     }
@@ -188,16 +186,10 @@ class AuthTableViewController: BaseTableViewController {
     }
 
     @objc func loginServiceButtonDidPress(_ button: UIButton) {
-        guard let realm = Realm.current else {
-            return
-        }
-
         let loginService = LoginService(value: loginServices[button.tag])
         if loginService.service == "gitlab", let url = serverPublicSettings?.gitlabUrl {
             loginServices[button.tag].serverUrl = url
-            try? realm.write {
-                loginService.serverUrl = url
-            }
+            loginService.serverUrl = url
         }
 
         if loginService.service == "wordpress" {
@@ -214,9 +206,9 @@ class AuthTableViewController: BaseTableViewController {
                 loginService.mapWordPress()
             } // missing implementation for wp-oauth-server
 
-            try? realm.write {
+            Realm.executeOnMainThread({ realm in
                 realm.add(loginService, update: true)
-            }
+            })
         }
 
         switch loginService.type {
@@ -358,4 +350,10 @@ extension AuthTableViewController {
             return 0
         }
     }
+}
+
+// MARK: Disable Theming
+
+extension AuthTableViewController {
+    override func applyTheme() { }
 }

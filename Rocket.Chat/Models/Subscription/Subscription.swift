@@ -67,6 +67,7 @@ final class Subscription: BaseModel {
 
     @objc dynamic var roomTopic: String?
     @objc dynamic var roomDescription: String?
+    @objc dynamic var roomAnnouncement: String?
     @objc dynamic var roomReadOnly = false
     @objc dynamic var roomUpdatedAt: Date?
     @objc dynamic var roomLastMessage: Message?
@@ -110,8 +111,6 @@ final class Subscription: BaseModel {
         set { privateAudioNotificationsValue = newValue.rawValue }
     }
 
-    let messages = LinkingObjects(fromType: Message.self, property: "subscription")
-
     let usersRoles = List<RoomRoles>()
 
     // MARK: Internal
@@ -123,6 +122,18 @@ final class Subscription: BaseModel {
             return nil
         }
     }
+
+    var messages: Results<Message>? {
+        return Realm.current?.objects(Message.self).filter("rid == '\(rid)'")
+    }
+
+    static func find(rid: String, realm: Realm? = Realm.current) -> Subscription? {
+        return realm?.objects(Subscription.self).filter("rid == '\(rid)'").first
+    }
+
+    static func find(name: String, realm: Realm? = Realm.current) -> Subscription? {
+        return realm?.objects(Subscription.self).filter("name == '\(name)'").first
+    }
 }
 
 final class RoomRoles: Object {
@@ -130,11 +141,10 @@ final class RoomRoles: Object {
     var roles = List<String>()
 }
 
-// MARK: Failed Messages
+// MARK: Avatar
 
 extension Subscription {
-
-    func avatarURL(auth: Auth? = nil) -> URL? {
+    static func avatarURL(for name: String, auth: Auth? = nil) -> URL? {
         guard
             let auth = auth ?? AuthManager.isAuthenticated(),
             let baseURL = auth.baseURL(),
@@ -145,14 +155,30 @@ extension Subscription {
 
         return URL(string: "\(baseURL)/avatar/%22\(encodedName)?format=jpeg")
     }
+}
 
-    func setTemporaryMessagesFailed() {
-        try? realm?.write {
-            messages.filter("temporary = true").forEach {
-                $0.temporary = false
-                $0.failed = true
-            }
+// MARK: Display Name
+
+extension Subscription {
+    func displayName() -> String {
+        guard let settings = AuthSettingsManager.settings else {
+            return name
         }
-    }
 
+        if type != .directMessage {
+            return settings.allowSpecialCharsOnRoomNames && !fname.isEmpty ? fname : name
+        }
+
+        return settings.useUserRealName && !fname.isEmpty ? fname : name
+    }
+}
+
+// MARK: Unmanaged Object
+
+extension Subscription: UnmanagedConvertible {
+    typealias UnmanagedType = UnmanagedSubscription
+
+    var unmanaged: UnmanagedSubscription? {
+        return UnmanagedSubscription(self)
+    }
 }

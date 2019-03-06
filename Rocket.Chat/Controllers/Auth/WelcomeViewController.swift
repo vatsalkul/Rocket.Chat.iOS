@@ -9,7 +9,7 @@
 import UIKit
 import SafariServices
 
-class WelcomeViewController: BaseViewController {
+final class WelcomeViewController: BaseViewController {
 
     internal var joinCommunitySegue = "JoinCommunity"
     internal let communityServerURL = "\nopen.rocket.chat"
@@ -18,6 +18,7 @@ class WelcomeViewController: BaseViewController {
     @IBOutlet weak var welcomeLabel: UILabel! {
         didSet {
             welcomeLabel.text = localized("onboarding.label_welcome")
+            welcomeLabel.font = welcomeLabel.font.bold()
         }
     }
 
@@ -53,15 +54,15 @@ class WelcomeViewController: BaseViewController {
             let title = NSAttributedString(
                 string: localized("onboarding.button_join_community_prefix"),
                 attributes: [
-                    NSAttributedStringKey.font: UIFont.systemFont(ofSize: 17, weight: .semibold),
-                    NSAttributedStringKey.foregroundColor: UIColor.RCSkyBlue()
+                    NSAttributedString.Key.font: UIFont.preferredFont(forTextStyle: .headline),
+                    NSAttributedString.Key.foregroundColor: UIColor.RCSkyBlue()
                 ]
             )
             let serverURL = NSAttributedString(
                 string: communityServerURL,
                 attributes: [
-                    NSAttributedStringKey.font: UIFont.systemFont(ofSize: 15, weight: .regular),
-                    NSAttributedStringKey.foregroundColor: UIColor.RCTextFieldGray()
+                    NSAttributedString.Key.font: UIFont.preferredFont(forTextStyle: .subheadline),
+                    NSAttributedString.Key.foregroundColor: UIColor.RCTextFieldGray()
                 ]
             )
 
@@ -73,7 +74,7 @@ class WelcomeViewController: BaseViewController {
 
             let combinationRange = NSRange(location: 0, length: combinedString.length)
             combinedString.addAttributes(
-                [NSAttributedStringKey.paragraphStyle: paragraphStyle],
+                [NSAttributedString.Key.paragraphStyle: paragraphStyle],
                 range: combinationRange
             )
 
@@ -130,4 +131,10 @@ class WelcomeViewController: BaseViewController {
 
         present(controller, animated: true, completion: nil)
     }
+}
+
+// MARK: Disable Theming
+
+extension WelcomeViewController {
+    override func applyTheme() { }
 }

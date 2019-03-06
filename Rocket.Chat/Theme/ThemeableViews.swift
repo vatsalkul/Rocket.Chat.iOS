@@ -7,8 +7,9 @@
 //
 
 import UIKit
-import SlackTextViewController
+import RocketChatViewController
 
+// swiftlint:disable file_length
 extension UIView: Themeable {
 
     /**
@@ -55,10 +56,19 @@ extension UIView: ThemeProvider {
      */
 
     var theme: Theme? {
-        guard type(of: self).description() != "_UIAlertControllerView" else { return nil }
-        guard let superview = superview else { return ThemeManager.theme }
+        let exemptedInternalViews = [
+            "UISwipeActionStandardButton",
+            "_UIAlertControllerView",
+            "UIActivityIndicatorView"
+        ]
+
+        let exemptedExternalViews = [
+            "SwipeCellKit.SwipeActionsView"
+        ]
+
+        guard !(exemptedInternalViews + exemptedExternalViews).contains(type(of: self).description()) else { return nil }
         if type(of: self).description() == "_UIPopoverView" { return themeForPopover }
-        return superview.theme
+        return ThemeManager.theme
     }
 
     private var themeForPopover: Theme? {
@@ -66,15 +76,17 @@ extension UIView: ThemeProvider {
         return Theme(
             backgroundColor: theme.focusedBackground,
             focusedBackground: theme.focusedBackground,
+            chatComponentBackground: theme.chatComponentBackground,
             auxiliaryBackground: theme.auxiliaryBackground,
             bannerBackground: theme.bannerBackground,
             titleText: theme.titleText,
             bodyText: theme.bodyText,
+            borderColor: theme.borderColor,
             controlText: theme.controlText,
             auxiliaryText: theme.auxiliaryText,
             tintColor: theme.tintColor,
             auxiliaryTintColor: theme.auxiliaryTintColor,
-            hyperlink: theme.hyperlink,
+            actionTintColor: theme.actionTintColor,
             mutedAccent: theme.mutedAccent,
             strongAccent: theme.strongAccent,
             appearence: theme.appearence
@@ -114,8 +126,8 @@ extension UIButton {
             let theme = theme,
             textField.clearButton === self,
             type(of: textField).description() != "UISearchBarTextField"
-        else {
-            return
+            else {
+                return
         }
 
         self.setImage(self.image(for: .normal)?.withRenderingMode(.alwaysTemplate), for: .normal)
@@ -239,7 +251,8 @@ extension UITextView {
     override func applyTheme() {
         super.applyTheme()
         guard let theme = theme else { return }
-        tintColor = theme.hyperlink
+        tintColor = theme.actionTintColor
+        textColor = theme.bodyText
         applyThemeFromRuntimeAttributes()
     }
 }
@@ -302,6 +315,15 @@ extension UIScrollView {
     }
 }
 
+extension UISlider {
+    override func applyTheme() {
+        super.applyTheme()
+        guard let theme = theme else { return }
+        tintColor = theme.actionTintColor
+        applyThemeFromRuntimeAttributes()
+    }
+}
+
 extension UIPickerView {
     override func applyTheme() {
         guard let theme = theme else { return }
@@ -324,11 +346,83 @@ extension UIPickerView {
 
 // MARK: External class extensions
 
-extension SLKTextInputbar {
+extension ComposerAddonStackView {
+    public override func addArrangedSubview(_ view: UIView) {
+        super.addArrangedSubview(view)
+        view.applyTheme()
+    }
+}
+
+extension HintsView {
     override func applyTheme() {
         super.applyTheme()
         guard let theme = theme else { return }
-        textView.keyboardAppearance = theme.appearence.keyboardAppearence
+        self.backgroundView?.backgroundColor = theme.backgroundColor
+        applyThemeFromRuntimeAttributes()
+    }
+
+    public func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        if let cell = cell as? TextHintCell<UILabel>, let theme = theme {
+            cell.backgroundColor = theme.backgroundColor
+            cell.prefixView.backgroundColor = theme.auxiliaryBackground
+            cell.prefixView.textColor = theme.tintColor
+            cell.applyThemeFromRuntimeAttributes()
+        }
+    }
+}
+
+extension UserHintAvatarViewCell {
+    @objc override func applyTheme() {
+        super.applyTheme()
+        usernameLabel.textColor = theme?.auxiliaryText
+    }
+}
+
+extension TextHintLabelCell {
+    @objc override func applyTheme() {
+        super.applyTheme()
+        prefixView.textColor = theme?.actionTintColor
+        prefixView.backgroundColor = theme?.auxiliaryBackground
+    }
+}
+
+extension TextHintEmojiViewCell {
+    @objc override func applyTheme() {
+        super.applyTheme()
+        prefixView.backgroundColor = theme?.auxiliaryBackground
+    }
+}
+
+extension ReplyView {
+    @objc override func applyTheme() {
+        super.applyTheme()
+        backgroundView.backgroundColor = theme?.auxiliaryBackground
+        nameLabel.textColor = theme?.actionTintColor
+        timeLabel.textColor = theme?.auxiliaryText
+        closeButton.tintColor = theme?.auxiliaryText
+    }
+}
+
+extension EditingView {
+    @objc override func applyTheme() {
+        super.applyTheme()
+        closeButton.tintColor = theme?.auxiliaryText
+    }
+}
+
+extension ComposerView {
+    override func applyTheme() {
+        super.applyTheme()
+        guard let theme = theme else { return }
+        layer.borderColor = #colorLiteral(red: 0.497693181, green: 0.494099319, blue: 0.5004472733, alpha: 0.1518210827)
+        containerView.backgroundColor = theme.focusedBackground
+
+        if theme == Theme.light {
+            containerView.backgroundColor = theme.backgroundColor
+        }
+
+        tintColor = theme.tintColor
+        topSeparatorView.backgroundColor = theme.mutedAccent
         applyThemeFromRuntimeAttributes()
     }
 
@@ -338,15 +432,18 @@ extension SLKTextInputbar {
     }
 }
 
-extension SLKTextView {
+extension ComposerTextView {
     override func applyTheme() {
         super.applyTheme()
         guard let theme = theme else { return }
-        layer.borderColor = #colorLiteral(red: 0.497693181, green: 0.494099319, blue: 0.5004472733, alpha: 0.1518210827)
-        backgroundColor = #colorLiteral(red: 0.497693181, green: 0.494099319, blue: 0.5004472733, alpha: 0.1021854048)
-        textColor = theme.bodyText
-        tintColor = theme.tintColor
-        applyThemeFromRuntimeAttributes()
+        placeholderLabel.textColor = theme.auxiliaryText
+        backgroundColor = theme.focusedBackground
+
+        if theme == Theme.light {
+            backgroundColor = theme.backgroundColor
+        }
+
+        keyboardAppearance = theme.appearence.keyboardAppearence
     }
 }
 
