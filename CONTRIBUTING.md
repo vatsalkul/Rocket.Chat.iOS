@@ -29,8 +29,11 @@ _(NOTE: Steps 3 and 4 must be executed from project's directory)_
 ```
 git clone https://github.com/RocketChat/Rocket.Chat.iOS
 ```
-2. Use the Rocket.Chat.xcworkspace file to open the Xcode workspace.
-3. Build the project by ⌘ + R
+2. Open terminal window, and `$ cd` into project directory.
+3. Run `$ pod install`
+4. You may require to run `$ pod update`
+5. Use the 'Rocket.Chat.xcworkspace' file to open the Xcode workspace.
+6. Build the project by ⌘ + R
 
 Also refer to [Guidelines](#project.pbxproj) for modifying files.
 
